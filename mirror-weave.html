@@ -20,6 +20,7 @@ canvas{max-width:min(90vw,800px);height:auto;background:#fff;margin-top:12px;box
 <div class="controls">
 <label><input type="checkbox" id="gray"> Black &amp; white</label>
 <label>Strips per direction <input type="range" id="strips" min="4" max="128" step="2" value="16"> <b id="sv">16</b></label>
+<label><input type="checkbox" id="plain"> 4x mirror only (no slicing)</label>
 <label><input type="checkbox" id="step"> Show only the first (vertical) pass</label>
 <label><input type="checkbox" id="full"> Full-size quarters (output 2× bigger)</label>
 <button id="dl" disabled>Download PNG</button>
@@ -30,8 +31,8 @@ const status=document.getElementById('status'),file=document.getElementById('fil
 gray=document.getElementById('gray'),full=document.getElementById('full'),dl=document.getElementById('dl');
 let img=null,name='image';
 file.onchange=e=>{e.target.files[0]&&load(e.target.files[0]);file.value=''};
-const strips=document.getElementById('strips'),sv=document.getElementById('sv'),step=document.getElementById('step');
-gray.onchange=full.onchange=step.onchange=render;strips.oninput=()=>{sv.textContent=strips.value;render()};
+const strips=document.getElementById('strips'),sv=document.getElementById('sv'),step=document.getElementById('step'),plain=document.getElementById('plain');
+gray.onchange=full.onchange=step.onchange=plain.onchange=render;strips.oninput=()=>{sv.textContent=strips.value;render()};
 function load(f){if(!f)return;name=(f.name||'photo').replace(/\.[^.]+$/,'');status.textContent='Loading photo…';
  const r=new FileReader();
  r.onerror=()=>{status.textContent='Could not read that photo. Try another one.'};
@@ -52,6 +53,7 @@ function render(){
  }
  // Weave: cut into S equal strips. Rebuild from the centre outward, pairing each strip
  // of the original-facing half with its mirror twin from the other half.
+ if(!plain.checked){
  const S=+strips.value,N=S/2,W2=out.width,H2=out.height;
  const edges=(L)=>Array.from({length:S+1},(_,k)=>Math.round(k*L/S));
  const src=document.createElement('canvas');src.width=W2;src.height=H2;src.getContext('2d').drawImage(out,0,0);
@@ -64,13 +66,14 @@ function render(){
   let ey=edges(H2),y=0;c.clearRect(0,0,W2,H2);
   for(let p=0;p<N;p++)for(const k of [p,S-1-p]){const h=ey[k+1]-ey[k];c.drawImage(src,0,ey[k],W2,h,0,y,W2,h);y+=h}
  }
+ }
  if(gray.checked){const d=c.getImageData(0,0,out.width,out.height),p=d.data;
   for(let i=0;i<p.length;i+=4){const v=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=p[i+1]=p[i+2]=v}c.putImageData(d,0,0)}
  prep();
 }
 let blob=null;
 function prep(){blob=null;dl.disabled=true;dl.textContent='Preparing…';out.toBlob(b=>{blob=b;dl.disabled=false;dl.textContent=canShare()?'Save to Photos':'Download PNG'},'image/png')}
-function fileOut(){return new File([blob],name+'-mirror-weave.png',{type:'image/png'})}
+function fileOut(){return new File([blob],name+(plain.checked?'-mirror4x':'-mirror-weave')+'.png',{type:'image/png'})}
 function canShare(){try{return !!(navigator.canShare&&navigator.canShare({files:[new File([new Blob()],'x.png',{type:'image/png'})]}))}catch(e){return false}}
 dl.onclick=()=>{if(!blob)return;const f=fileOut();
  if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(()=>{});return}
