@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mirror Weave</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#111;color:#eee;margin:0;padding:24px;text-align:center}
+h1{font-weight:600;margin:0 0 16px}
+#pick{display:block;max-width:600px;margin:0 auto 16px;padding:22px;font-size:22px;font-weight:600;background:#e33;color:#fff;border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#pick:active{background:#b22}
+#file{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.controls{margin:12px 0;display:flex;gap:16px;justify-content:center;flex-wrap:wrap;align-items:center}
+button,a.btn{background:#e33;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:15px;cursor:pointer;text-decoration:none}
+button:disabled{opacity:.4;cursor:default}
+#status{min-height:20px;color:#f88;margin-bottom:8px}
+canvas{max-width:min(90vw,800px);height:auto;background:#fff;margin-top:12px;box-shadow:0 4px 24px #000}
+</style></head><body>
+<h1>Mirror Weave</h1>
+<label id="pick" for="file">📷 Choose Photo</label>
+<input type="file" id="file" accept="image/*">
+<div id="status"></div>
+<div class="controls">
+<label><input type="checkbox" id="gray"> Black &amp; white</label>
+<label>Strips per direction <input type="range" id="strips" min="4" max="128" step="2" value="16"> <b id="sv">16</b></label>
+<label><input type="checkbox" id="step"> Show only the first (vertical) pass</label>
+<label><input type="checkbox" id="full"> Full-size quarters (output 2× bigger)</label>
+<button id="dl" disabled>Download PNG</button>
+</div>
+<canvas id="out" width="0" height="0"></canvas>
+<script>
+const status=document.getElementById('status'),file=document.getElementById('file'),out=document.getElementById('out'),
+gray=document.getElementById('gray'),full=document.getElementById('full'),dl=document.getElementById('dl');
+let img=null,name='image';
+file.onchange=e=>{e.target.files[0]&&load(e.target.files[0]);file.value=''};
+const strips=document.getElementById('strips'),sv=document.getElementById('sv'),step=document.getElementById('step');
+gray.onchange=full.onchange=step.onchange=render;strips.oninput=()=>{sv.textContent=strips.value;render()};
+function load(f){if(!f)return;name=(f.name||'photo').replace(/\.[^.]+$/,'');status.textContent='Loading photo…';
+ const r=new FileReader();
+ r.onerror=()=>{status.textContent='Could not read that photo. Try another one.'};
+ r.onload=()=>{const i=new Image();
+  i.onload=()=>{img=i;try{render();status.textContent=''}catch(err){status.textContent='Error: '+err.message}};
+  i.onerror=()=>{status.textContent='That photo format could not be opened. Try a screenshot or a JPEG.'};
+  i.src=r.result};
+ r.readAsDataURL(f)}
+function render(){
+ if(!img)return;
+ const W=img.naturalWidth,H=img.naturalHeight,s=Math.min(full.checked?1:0.5,2048/Math.max(W,H));
+ const qw=Math.round(W*s),qh=Math.round(H*s);
+ out.width=qw*2;out.height=qh*2;
+ const c=out.getContext('2d');c.imageSmoothingQuality='high';
+ // [x, y, flipX, flipY]: TL mirrored, TR original, BL rotated 180, BR flipped upside down
+ for(const [x,y,fx,fy] of [[0,0,1,0],[qw,0,0,0],[0,qh,1,1],[qw,qh,0,1]]){
+  c.save();c.translate(x+(fx?qw:0),y+(fy?qh:0));c.scale(fx?-1:1,fy?-1:1);c.drawImage(img,0,0,qw,qh);c.restore();
+ }
+ // Weave: cut into S equal strips. Rebuild from the centre outward, pairing each strip
+ // of the original-facing half with its mirror twin from the other half.
+ const S=+strips.value,N=S/2,W2=out.width,H2=out.height;
+ const edges=(L)=>Array.from({length:S+1},(_,k)=>Math.round(k*L/S));
+ const src=document.createElement('canvas');src.width=W2;src.height=H2;src.getContext('2d').drawImage(out,0,0);
+ // vertical pass: right half (original) strip p, then its mirror twin from the left half
+ let ex=edges(W2),x=0;c.clearRect(0,0,W2,H2);
+ for(let p=0;p<N;p++)for(const k of [N+p,N-1-p]){const w=ex[k+1]-ex[k];c.drawImage(src,ex[k],0,w,H2,x,0,w,H2);x+=w}
+ if(!step.checked){
+  src.getContext('2d').clearRect(0,0,W2,H2);src.getContext('2d').drawImage(out,0,0);
+  // horizontal pass: top half (upright) strip p, then its flipped twin from the bottom half
+  let ey=edges(H2),y=0;c.clearRect(0,0,W2,H2);
+  for(let p=0;p<N;p++)for(const k of [p,S-1-p]){const h=ey[k+1]-ey[k];c.drawImage(src,0,ey[k],W2,h,0,y,W2,h);y+=h}
+ }
+ if(gray.checked){const d=c.getImageData(0,0,out.width,out.height),p=d.data;
+  for(let i=0;i<p.length;i+=4){const v=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=p[i+1]=p[i+2]=v}c.putImageData(d,0,0)}
+ dl.disabled=false;
+}
+dl.onclick=()=>out.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name+'-mirror-weave.png';a.click()},'image/png');
+</script></body></html>
