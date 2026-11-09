@@ -66,7 +66,13 @@ function render(){
  }
  if(gray.checked){const d=c.getImageData(0,0,out.width,out.height),p=d.data;
   for(let i=0;i<p.length;i+=4){const v=.299*p[i]+.587*p[i+1]+.114*p[i+2];p[i]=p[i+1]=p[i+2]=v}c.putImageData(d,0,0)}
- dl.disabled=false;
+ prep();
 }
-dl.onclick=()=>out.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name+'-mirror-weave.png';a.click()},'image/png');
+let blob=null;
+function prep(){blob=null;dl.disabled=true;dl.textContent='Preparing…';out.toBlob(b=>{blob=b;dl.disabled=false;dl.textContent=canShare()?'Save to Photos':'Download PNG'},'image/png')}
+function fileOut(){return new File([blob],name+'-mirror-weave.png',{type:'image/png'})}
+function canShare(){try{return !!(navigator.canShare&&navigator.canShare({files:[new File([new Blob()],'x.png',{type:'image/png'})]}))}catch(e){return false}}
+dl.onclick=()=>{if(!blob)return;const f=fileOut();
+ if(navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f]}).catch(()=>{});return}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=f.name;a.click()};
 </script></body></html>
